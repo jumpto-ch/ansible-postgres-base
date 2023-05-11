@@ -20,27 +20,3 @@
     state: "started"
     enabled: true
   become: true
-
-- name: "Create user with specific right"
-  postgresql_user:
-    name: "{{postgres_user}}"
-    password: "{{postgres_password}}"
-    role_attr_flags: SUPERUSER
-  become_user: "postgres"
-  become: true
-
-- name: register postgresql_version
-  ansible.builtin.shell: pg_config --version | awk -F'[. ]' '{print $2}'
-  register: postgresql_version
-
-- name: "Grant user on the DB"
-  postgresql_pg_hba:
-    dest: /etc/postgresql/{{postgresql_version}}/main/pg_hba.conf
-    contype: local
-    users: "{{postgres_user}}"
-    databases: "all"
-    method: md5
-    create: true
-  become_user: "postgres"
-  become: true
-  notify: restart postgres
