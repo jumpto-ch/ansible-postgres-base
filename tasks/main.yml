@@ -11,6 +11,7 @@
       - "python3-psycopg2"
       - "libpq-dev"
       - "build-essential"
+      - "postgresql-14-postgis-3"
     state: "present"
   become: true
 
