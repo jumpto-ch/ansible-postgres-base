@@ -6,17 +6,64 @@
     name:
       - "acl"
       - "postgresql"
+      - "postgresql-client"
       - "python3-pip"
       - "python3-dev"
       - "python3-psycopg2"
       - "libpq-dev"
       - "build-essential"
     state: "present"
+  notify: restart postgres
   become: true
 
-- name: "start postgres service"
-  service:
-    name: "postgresql"
-    state: "started"
-    enabled: true
+# get ram size from the system and save it GB
+- name: "Get ram size"
+  shell: "free -g | grep Mem | awk '{print $2}'"
+  register: ram_size
+
+- name: "Set ram size"
+  set_fact:
+    ram_size: "{{ ram_size.stdout }}"
+  when: ram_size.stdout is defined
+
+# Find memory unit
+- name: "Find memory unit"
+  set_fact:
+    memory_unit: "{{ ram_size | int | default(0) | int }}"
+  when: ram_size.stdout is defined
+
+#Configure instance with curl -d '{"dbVersion": "V11", "osType": "Linux", "dbApplication": "WEB", "ram": { "memory" : 4, "unit" : "GB"}, "dataStorage": "SSD"}' -H "Content-Type: application/json" -X POST https://pgtune.sainth.de/api/configuration
+- name: "Execute curl command"
+  uri:
+    url: "https://pgtune.sainth.de/api/configuration"
+    method: POST
+    body_format: json
+    body:
+      dbVersion: "V13"
+      osType: "Linux"
+      dbApplication: "DATA_WAREHOUSE"
+      ram:
+        memory: 16
+        unit: "GB"
+      cores: 8
+      connections: 400
+      dataStorage: "SSD"
+    return_content: yes
+  register: response
+
+- name: Convert part of response.content to dictionary
+  set_fact:
+    temp_config: "{{ response.content.split('\n\n')[1].split('\n')[0:-1] }}"
+
+- name: Convert part of response.content to dictionary
+  set_fact:
+    config: "{{ temp_config | map('split', ' = ') }}"
+
+- name: Loop on config variable and set parameters
+  community.postgresql.postgresql_set:
+    name: "{{ item[0] }}"
+    value: "{{ item[1] }}"
+  loop: "{{ config }}"
+  notify: restart postgres
   become: true
+  become_user: postgres
